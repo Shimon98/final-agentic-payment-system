@@ -41,6 +41,9 @@ def test_exact_specialist_agent_names() -> None:
 def test_triage_has_exact_three_handoffs_and_no_tools() -> None:
     definitions = _specialist_agents("test-model")  # type: ignore[arg-type]
     assert definitions.triage.tools == []
+    assert definitions.triage.output_type is None
+    assert definitions.triage.model_settings.tool_choice == "required"
+    assert definitions.triage.model_settings.parallel_tool_calls is False
     assert [handoff.agent_name for handoff in definitions.triage.handoffs] == [
         "Fraud Review Specialist",
         "Security Review Specialist",
@@ -100,6 +103,30 @@ def test_all_instructions_contain_required_safety_boundaries() -> None:
         assert "never mutate a balance" in instructions
         assert "do not invent" in instructions
         assert "structured schema" in instructions
+
+
+def test_specialist_instructions_require_exact_tool_facts_without_invention() -> None:
+    definitions = _specialist_agents("test-model")  # type: ignore[arg-type]
+    for agent in (
+        definitions.fraud,
+        definitions.security,
+        definitions.explanation,
+    ):
+        instructions = str(agent.instructions)
+        assert "Call the assigned read-only fact tool before" in instructions
+        assert "Use only exact facts returned by that tool." in instructions
+        assert "Do not mention the correlation ID." in instructions
+        assert "Do not invent or infer IDs." in instructions
+        assert "Do not invent or infer monetary amounts." in instructions
+        assert "unless that exact status is present" in instructions
+        assert "say it is unavailable without guessing" in instructions
+        assert "Set recommendation=None" in instructions
+
+    explanation = str(definitions.explanation.instructions)
+    assert "Explain only the supplied action and status." in explanation
+    assert "Do not ask the user to locate an amount" in explanation
+    assert "account UI, external log, bank, or payment provider" in explanation
+    assert "transaction ID unless it is explicitly present" in explanation
 
 
 def test_no_financial_mutation_tool_or_handoff_exists() -> None:

@@ -63,6 +63,16 @@ _ALLOWED_SPECIALISTS = {
     ),
 }
 _PHONE = re.compile(r"(?<!\d)(?:\+?\d[\s().-]*){7,15}(?!\d)")
+_KNOWN_OUTPUT_GUARDRAIL_REASONS = frozenset(
+    {
+        "invalid_output_type",
+        "wrong_specialist_identity",
+        "payment_execution_claim",
+        "invented_identifier",
+        "invented_amount",
+    }
+)
+_UNKNOWN_OUTPUT_GUARDRAIL_REASON = "unknown_output_guardrail_reason"
 
 
 def _redact_complete_phone(text: str) -> str:
@@ -71,6 +81,19 @@ def _redact_complete_phone(text: str) -> str:
         return "[redacted-phone]" if 7 <= len(digits) <= 15 else match.group()
 
     return _PHONE.sub(replace, text)
+
+
+def _safe_output_guardrail_reason(error: OutputGuardrailTripwireTriggered) -> str:
+    try:
+        output_info = error.guardrail_result.output.output_info
+    except AttributeError:
+        return _UNKNOWN_OUTPUT_GUARDRAIL_REASON
+    if not isinstance(output_info, Mapping):
+        return _UNKNOWN_OUTPUT_GUARDRAIL_REASON
+    reason = output_info.get("reason")
+    if not isinstance(reason, str) or reason not in _KNOWN_OUTPUT_GUARDRAIL_REASONS:
+        return _UNKNOWN_OUTPUT_GUARDRAIL_REASON
+    return reason
 
 
 class OpenAIAgentsRuntime(
@@ -146,9 +169,16 @@ class OpenAIAgentsRuntime(
                 "Language-model run timed out",
                 context={"provider": self._model_factory.provider_name()},
             ) from error
+        except OutputGuardrailTripwireTriggered as error:
+            raise LLMGuardrailError(
+                "Language-model guardrail rejected the run",
+                context={
+                    "provider": self._model_factory.provider_name(),
+                    "guardrail_reason": _safe_output_guardrail_reason(error),
+                },
+            ) from error
         except (
             InputGuardrailTripwireTriggered,
-            OutputGuardrailTripwireTriggered,
             ToolInputGuardrailTripwireTriggered,
             ToolOutputGuardrailTripwireTriggered,
         ) as error:

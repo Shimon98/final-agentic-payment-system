@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from agents import Agent, AgentOutputSchema, Model
+from agents import Agent, AgentOutputSchema, Model, ModelSettings
 
 from agentic_payments.agents.prompts import (
     EXPLANATION_SYSTEM_PROMPT,
@@ -14,6 +14,7 @@ from agentic_payments.agents.prompts import (
     SECURITY_SYSTEM_PROMPT,
 )
 from agentic_payments.application import RouterDecision
+from agentic_payments.domain import Intent
 from agentic_payments.infrastructure.llm.context import SDKReadOnlyContext
 from agentic_payments.infrastructure.llm.schemas import (
     ReadOnlySpecialistOutput,
@@ -51,6 +52,17 @@ exactly once to the matching fraud, security, or explanation specialist. Never h
 intent and never answer the task yourself.
 """.strip()
 
+_SPECIALIST_FACT_SUFFIX = """
+Call the assigned read-only fact tool before producing the final output.
+Use only exact facts returned by that tool.
+Do not mention the correlation ID.
+Do not invent or infer IDs.
+Do not invent or infer monetary amounts.
+Do not describe an operation as executed unless that exact status is present in the returned facts.
+When information is unavailable, say it is unavailable without guessing.
+Set recommendation=None when no recommendation can be supported directly by the supplied facts.
+""".strip()
+
 _FRAUD_SUFFIX = """
 You are the fraud read-only specialist. Call only get_fraud_review_facts.
 Use only returned facts. Set specialist to fraud. Review only; never perform a payment.
@@ -64,6 +76,10 @@ Use only returned facts. Set specialist to security. Review only; never perform 
 _EXPLANATION_SUFFIX = """
 You are the explanation read-only specialist. Call only get_last_action_facts.
 Use only returned facts. Set specialist to explanation. Explain only; never perform a payment.
+Explain only the supplied action and status.
+Do not ask the user to locate an amount when no amount is present.
+Do not refer to an account UI, external log, bank, or payment provider.
+Do not mention a transaction ID unless it is explicitly present in facts.
 """.strip()
 
 
@@ -94,7 +110,10 @@ def _specialist_agents(model: Model) -> _SpecialistAgents:
     fraud = Agent[SDKReadOnlyContext](
         name="Fraud Review Specialist",
         handoff_description="Review supplied immutable fraud facts only.",
-        instructions=f"{FRAUD_SYSTEM_PROMPT}\n\n{_COMMON_SUFFIX}\n\n{_FRAUD_SUFFIX}",
+        instructions=(
+            f"{FRAUD_SYSTEM_PROMPT}\n\n{_COMMON_SUFFIX}\n\n"
+            f"{_SPECIALIST_FACT_SUFFIX}\n\n{_FRAUD_SUFFIX}"
+        ),
         model=model,
         output_type=ReadOnlySpecialistOutput,
         tools=[get_fraud_review_facts],
@@ -105,7 +124,10 @@ def _specialist_agents(model: Model) -> _SpecialistAgents:
     security = Agent[SDKReadOnlyContext](
         name="Security Review Specialist",
         handoff_description="Review supplied immutable security facts only.",
-        instructions=f"{SECURITY_SYSTEM_PROMPT}\n\n{_COMMON_SUFFIX}\n\n{_SECURITY_SUFFIX}",
+        instructions=(
+            f"{SECURITY_SYSTEM_PROMPT}\n\n{_COMMON_SUFFIX}\n\n"
+            f"{_SPECIALIST_FACT_SUFFIX}\n\n{_SECURITY_SUFFIX}"
+        ),
         model=model,
         output_type=ReadOnlySpecialistOutput,
         tools=[get_security_review_facts],
@@ -116,7 +138,10 @@ def _specialist_agents(model: Model) -> _SpecialistAgents:
     explanation = Agent[SDKReadOnlyContext](
         name="Payment Explanation Specialist",
         handoff_description="Explain supplied immutable last-action facts only.",
-        instructions=(f"{EXPLANATION_SYSTEM_PROMPT}\n\n{_COMMON_SUFFIX}\n\n{_EXPLANATION_SUFFIX}"),
+        instructions=(
+            f"{EXPLANATION_SYSTEM_PROMPT}\n\n{_COMMON_SUFFIX}\n\n"
+            f"{_SPECIALIST_FACT_SUFFIX}\n\n{_EXPLANATION_SUFFIX}"
+        ),
         model=model,
         output_type=ReadOnlySpecialistOutput,
         tools=[get_last_action_facts],
@@ -128,14 +153,20 @@ def _specialist_agents(model: Model) -> _SpecialistAgents:
         name="Payment Read-Only Triage",
         instructions=f"{ROUTER_SYSTEM_PROMPT}\n\n{_COMMON_SUFFIX}\n\n{_TRIAGE_SUFFIX}",
         model=model,
-        output_type=ReadOnlySpecialistOutput,
         tools=[],
         handoffs=[
-            _read_only_handoff(fraud),
-            _read_only_handoff(security),
-            _read_only_handoff(explanation),
+            _read_only_handoff(fraud, allowed_intent=Intent.FRAUD_CHECK),
+            _read_only_handoff(security, allowed_intent=Intent.SECURITY_REVIEW),
+            _read_only_handoff(
+                explanation,
+                allowed_intent=Intent.EXPLAIN_LAST_ACTION,
+            ),
         ],
         input_guardrails=[read_only_input],
+        model_settings=ModelSettings(
+            tool_choice="required",
+            parallel_tool_calls=False,
+        ),
     )
     return _SpecialistAgents(
         triage=triage,

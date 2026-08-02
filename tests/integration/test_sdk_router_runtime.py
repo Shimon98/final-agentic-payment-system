@@ -7,13 +7,21 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from agents import Agent, Runner
+from agents import (
+    Agent,
+    GuardrailFunctionOutput,
+    OutputGuardrail,
+    OutputGuardrailTripwireTriggered,
+    Runner,
+)
+from agents.guardrail import OutputGuardrailResult
 
 from agentic_payments.application import BusinessMemory, RouterDecision
 from agentic_payments.domain import Intent
 from agentic_payments.infrastructure.config import Settings
 from agentic_payments.infrastructure.llm import (
     AgentsModelFactory,
+    LLMGuardrailError,
     LLMStructuredOutputError,
     LLMUnavailableError,
     OpenAIAgentsRuntime,
@@ -39,6 +47,30 @@ def _runner_result(output: object) -> SimpleNamespace:
         last_agent=Agent(name="Payment Intent Router", model="test-model"),
         new_items=[],
     )
+
+
+def _output_guardrail_error(reason: object) -> OutputGuardrailTripwireTriggered:
+    guardrail = OutputGuardrail(
+        lambda _context, _agent, _output: GuardrailFunctionOutput(
+            output_info={"reason": reason},
+            tripwire_triggered=True,
+        ),
+        name="test_output_guardrail",
+    )
+    function_output = GuardrailFunctionOutput(
+        output_info={
+            "reason": reason,
+            "unsafe_extra": "prompt facts test-secret raw-model-output",
+        },
+        tripwire_triggered=True,
+    )
+    result = OutputGuardrailResult(
+        guardrail=guardrail,
+        agent_output="prompt facts test-secret raw-model-output",
+        agent=Agent(name="Guardrail Agent", model="test-model"),
+        output=function_output,
+    )
+    return OutputGuardrailTripwireTriggered(result)
 
 
 @pytest.mark.asyncio
@@ -209,6 +241,71 @@ async def test_provider_exception_is_safely_converted(
         )
     assert "raw secret provider body" not in str(captured.value)
     assert captured.value.context["failure_type"] == "RuntimeError"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "invalid_output_type",
+        "wrong_specialist_identity",
+        "payment_execution_claim",
+        "invented_identifier",
+        "invented_amount",
+    ],
+)
+async def test_approved_output_guardrail_reason_is_safely_retained(
+    reason: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def rejected(
+        cls: type[Runner],
+        starting_agent: Agent[Any],
+        input: str,
+        **kwargs: Any,
+    ) -> object:
+        raise _output_guardrail_error(reason)
+
+    monkeypatch.setattr(Runner, "run", classmethod(rejected))
+    with pytest.raises(LLMGuardrailError) as captured:
+        await _runtime().route(
+            user_input="unknown",
+            correlation_id="CORR-1",
+            memory=BusinessMemory(),
+        )
+    assert captured.value.context == {
+        "provider": "openai",
+        "guardrail_reason": reason,
+    }
+    rendered = f"{captured.value} {dict(captured.value.context)}"
+    assert "raw-model-output" not in rendered
+    assert "test-secret" not in rendered
+    assert "prompt facts" not in rendered
+
+
+@pytest.mark.asyncio
+async def test_unknown_output_guardrail_reason_uses_stable_marker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def rejected(
+        cls: type[Runner],
+        starting_agent: Agent[Any],
+        input: str,
+        **kwargs: Any,
+    ) -> object:
+        raise _output_guardrail_error("future_unsafe_reason")
+
+    monkeypatch.setattr(Runner, "run", classmethod(rejected))
+    with pytest.raises(LLMGuardrailError) as captured:
+        await _runtime().route(
+            user_input="unknown",
+            correlation_id="CORR-1",
+            memory=BusinessMemory(),
+        )
+    assert captured.value.context == {
+        "provider": "openai",
+        "guardrail_reason": "unknown_output_guardrail_reason",
+    }
 
 
 @pytest.mark.asyncio

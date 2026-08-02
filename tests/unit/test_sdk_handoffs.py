@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
+import pytest
 from agents import HandoffInputData, RunContextWrapper
 
 from agentic_payments.domain import Intent
@@ -38,6 +40,48 @@ def test_exact_three_handoff_targets_and_public_filters() -> None:
         "Payment Explanation Specialist",
     ]
     assert all(handoff.input_filter is not None for handoff in agents.triage.handoffs)
+
+
+@pytest.mark.parametrize(
+    ("intent", "enabled_name"),
+    [
+        (Intent.FRAUD_CHECK, "Fraud Review Specialist"),
+        (Intent.SECURITY_REVIEW, "Security Review Specialist"),
+        (Intent.EXPLAIN_LAST_ACTION, "Payment Explanation Specialist"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_exactly_one_handoff_is_enabled_for_each_read_only_intent(
+    intent: Intent,
+    enabled_name: str,
+) -> None:
+    agents = _specialist_agents("test-model")  # type: ignore[arg-type]
+    context = SDKReadOnlyContext(intent, "CORR-1", NOW, {})
+    wrapper = RunContextWrapper(context=context)
+    enabled: list[str] = []
+    for configured_handoff in agents.triage.handoffs:
+        predicate = configured_handoff.is_enabled
+        assert callable(predicate)
+        if await predicate(wrapper, agents.triage):
+            enabled.append(configured_handoff.agent_name)
+    assert enabled == [enabled_name]
+
+
+@pytest.mark.parametrize(
+    "context",
+    [
+        object(),
+        SimpleNamespace(allowed_intent=Intent.TRANSFER_MONEY),
+    ],
+)
+@pytest.mark.asyncio
+async def test_invalid_or_mutating_context_enables_no_handoff(context: object) -> None:
+    agents = _specialist_agents("test-model")  # type: ignore[arg-type]
+    wrapper = RunContextWrapper(context=context)
+    for configured_handoff in agents.triage.handoffs:
+        predicate = configured_handoff.is_enabled
+        assert callable(predicate)
+        assert await predicate(wrapper, agents.triage) is False
 
 
 def test_handoff_input_is_replaced_with_sanitized_current_context() -> None:
