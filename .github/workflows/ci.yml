@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUTF8: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+  RUN_LIVE_LLM_TESTS: "false"
+  LLM_PROVIDER: "rule_based"
+  ENABLE_LLM_ROUTER: "false"
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Synchronize locked dependencies
+        run: uv sync --frozen
+
+      - name: Ruff check
+        run: uv run ruff check src scripts tests
+
+      - name: Ruff format check
+        run: uv run ruff format --check src scripts tests
+
+      - name: Mypy
+        run: uv run mypy src/agentic_payments scripts
+
+      - name: Standard tests
+        run: >-
+          uv run pytest tests/unit tests/integration tests/concurrency tests/end_to_end
+          -m "not live_llm" -q
+
+      - name: Coverage
+        run: >-
+          uv run pytest tests/unit tests/integration tests/concurrency tests/end_to_end
+          -m "not live_llm"
+          --cov=src/agentic_payments
+          --cov=scripts
+          --cov-report=term-missing
+          --cov-fail-under=85
+
+      - name: Validate submitted notebook
+        run: uv run python scripts/validate_notebook.py
+
+      - name: Documentation tests
+        run: >-
+          uv run pytest
+          tests/unit/test_readme_documentation.py
+          tests/unit/test_documentation_links.py
+          tests/unit/test_documentation_content.py
+          tests/integration/test_documentation_source_alignment.py
+          tests/integration/test_submission_documentation.py
+          -q
+
+      - name: Confirm repository data is only the placeholder
+        shell: bash
+        run: |
+          files="$(find data -type f -printf '%P\n' | sort)"
+          test "$files" = ".gitkeep"
+
+      - name: Secret and private-content scan
+        run: >-
+          uv run pytest
+          tests/integration/test_documentation_security.py
+          tests/integration/test_ci_workflow.py
+          -q

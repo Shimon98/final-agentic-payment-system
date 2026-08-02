@@ -1,0 +1,1 @@
+"""Educational agentic payment simulation."""
