@@ -7,7 +7,16 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from agents import Agent, HandoffOutputItem, Runner, ToolCallItem
+from agents import (
+    Agent,
+    HandoffCallItem,
+    HandoffInputData,
+    HandoffOutputItem,
+    RunContextWrapper,
+    Runner,
+    ToolCallItem,
+)
+from openai.types.responses import ResponseFunctionToolCall
 
 from agentic_payments.domain import Intent
 from agentic_payments.infrastructure.config import Settings
@@ -20,6 +29,8 @@ from agentic_payments.infrastructure.llm import (
     ReadOnlySpecialistOutput,
     SpecialistType,
 )
+from agentic_payments.infrastructure.llm.context import SDKReadOnlyContext
+from agentic_payments.infrastructure.llm.sdk_handoffs import _sanitize_handoff_input
 
 NOW = datetime(2026, 8, 2, 12, 0, tzinfo=UTC)
 
@@ -83,6 +94,59 @@ def _result(
         last_agent=target,
         new_items=new_items,
     )
+
+
+def test_sanitized_filter_preserves_real_handoff_metadata_for_runtime() -> None:
+    source_agent = Agent(name="Payment Read-Only Triage", model="test-model")
+    target_agent = Agent(name="Fraud Review Specialist", model="test-model")
+    call = HandoffCallItem(
+        agent=source_agent,
+        raw_item=ResponseFunctionToolCall(
+            arguments="{}",
+            call_id="CALL-INTEGRATION",
+            name="transfer_to_fraud_review_specialist",
+            type="function_call",
+        ),
+    )
+    output = HandoffOutputItem(
+        agent=source_agent,
+        raw_item={
+            "type": "function_call_output",
+            "call_id": "CALL-INTEGRATION",
+            "output": "accepted",
+        },
+        source_agent=source_agent,
+        target_agent=target_agent,
+    )
+    source = HandoffInputData(
+        input_history="unsafe prior model history",
+        pre_handoff_items=(call,),
+        new_items=(call, output),
+        run_context=RunContextWrapper(
+            context=SDKReadOnlyContext(
+                Intent.FRAUD_CHECK,
+                "CORR-1",
+                NOW,
+                {"risk_level": "LOW"},
+            )
+        ),
+    )
+
+    filtered = _sanitize_handoff_input(source)
+    result = SimpleNamespace(
+        new_items=filtered.new_items,
+        last_agent=target_agent,
+    )
+    handoff_occurred, tool_names = OpenAIAgentsRuntime._run_metadata(result)
+
+    assert filtered.new_items is source.new_items
+    assert any(isinstance(item, HandoffCallItem) for item in filtered.new_items)
+    assert any(isinstance(item, HandoffOutputItem) for item in filtered.new_items)
+    assert filtered.input_items == ()
+    assert filtered.pre_handoff_items == ()
+    assert handoff_occurred is True
+    assert tool_names == []
+    assert result.last_agent.name == "Fraud Review Specialist"
 
 
 @pytest.mark.asyncio

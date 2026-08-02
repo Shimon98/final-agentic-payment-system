@@ -39,7 +39,7 @@ def _sanitize_handoff_input(data: HandoffInputData) -> HandoffInputData:
     return data.clone(
         input_history=sanitized,
         pre_handoff_items=(),
-        new_items=(),
+        new_items=data.new_items,
         input_items=(),
     )
 

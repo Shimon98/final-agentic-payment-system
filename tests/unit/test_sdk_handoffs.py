@@ -7,7 +7,14 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
-from agents import HandoffInputData, RunContextWrapper
+from agents import (
+    Agent,
+    HandoffCallItem,
+    HandoffInputData,
+    HandoffOutputItem,
+    RunContextWrapper,
+)
+from openai.types.responses import ResponseFunctionToolCall
 
 from agentic_payments.domain import Intent
 from agentic_payments.infrastructure.llm.context import SDKReadOnlyContext
@@ -24,10 +31,31 @@ def _input_data() -> HandoffInputData:
         NOW,
         {"transaction_id": "TXN-1", "amount": "10.00"},
     )
+    source_agent = Agent(name="Payment Read-Only Triage", model="test-model")
+    target_agent = Agent(name="Fraud Review Specialist", model="test-model")
+    handoff_call = HandoffCallItem(
+        agent=source_agent,
+        raw_item=ResponseFunctionToolCall(
+            arguments="{}",
+            call_id="CALL-1",
+            name="transfer_to_fraud_review_specialist",
+            type="function_call",
+        ),
+    )
+    handoff_output = HandoffOutputItem(
+        agent=source_agent,
+        raw_item={
+            "type": "function_call_output",
+            "call_id": "CALL-1",
+            "output": "accepted",
+        },
+        source_agent=source_agent,
+        target_agent=target_agent,
+    )
     return HandoffInputData(
         input_history="unsafe prior history with TXN-999 and 99.00",
-        pre_handoff_items=(),
-        new_items=(),
+        pre_handoff_items=(handoff_call,),
+        new_items=(handoff_call, handoff_output),
         run_context=RunContextWrapper(context=context),
     )
 
@@ -96,16 +124,23 @@ def test_handoff_input_is_replaced_with_sanitized_current_context() -> None:
     }
     assert "TXN-999" not in filtered.input_history
     assert filtered.pre_handoff_items == ()
-    assert filtered.new_items == ()
+    assert filtered.new_items == source.new_items
+    assert filtered.new_items is source.new_items
+    assert any(isinstance(item, HandoffCallItem) for item in filtered.new_items)
+    assert any(isinstance(item, HandoffOutputItem) for item in filtered.new_items)
     assert filtered.input_items == ()
 
 
 def test_handoff_filter_does_not_mutate_source() -> None:
     source = _input_data()
     original_history = source.input_history
+    original_pre_handoff_items = source.pre_handoff_items
+    original_new_items = source.new_items
     filtered = _sanitize_handoff_input(source)
     assert filtered is not source
     assert source.input_history == original_history
+    assert source.pre_handoff_items == original_pre_handoff_items
+    assert source.new_items == original_new_items
     assert source.input_items is None
 
 
