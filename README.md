@@ -31,7 +31,8 @@ runs the complete ordinary workflow without an API key or network provider.
 - Atomic JSON state replacement and idempotent JSONL audit delivery.
 - Deterministically ordered asynchronous locks with cancellation-safe release.
 - Optional guarded OpenAI Agents SDK routing and read-only specialist handoffs.
-- A self-contained, executed, source-synchronized submission notebook.
+- A repository-based, executed submission notebook that imports the production package from
+  `src/`.
 
 ## Architecture
 
@@ -197,14 +198,14 @@ See [Execution examples](docs/execution_examples.md) for sanitized illustrative 
 
 ## Running the notebook
 
-Build and execute the self-contained root notebook:
+Build and execute the root notebook from the complete submitted repository:
 
 ```powershell
 uv run python scripts/build_notebook.py
 ```
 
-Validate structure, preserved outputs, source synchronization, privacy, and isolated
-portability:
+Validate structure, preserved outputs, repository-based imports, privacy, temporary-data
+isolation, and clear failure outside the repository:
 
 ```powershell
 uv run python scripts/validate_notebook.py

@@ -1,8 +1,7 @@
-"""Deterministic, readable, atomic notebook-builder tests."""
+"""Deterministic, readable, atomic repository-notebook builder tests."""
 
 from __future__ import annotations
 
-import hashlib
 import importlib
 import sys
 from pathlib import Path
@@ -16,60 +15,39 @@ if str(SCRIPTS) not in sys.path:
 builder = importlib.import_module("build_notebook")
 
 
-def test_collects_every_production_python_file_in_stable_order() -> None:
-    sources = builder.collect_source_files(builder.SOURCE_ROOT)
-    expected = {
-        Path("src", "agentic_payments", *path.relative_to(builder.SOURCE_ROOT).parts).as_posix()
-        for path in builder.SOURCE_ROOT.rglob("*.py")
-        if "__pycache__" not in path.parts
-    }
-
-    assert set(sources) == expected
-    assert list(sources) == sorted(sources)
-    assert all(path.endswith(".py") for path in sources)
-    assert all("__pycache__" not in path for path in sources)
-
-
-def test_manifest_has_stable_sha256_hashes() -> None:
-    sources = builder.collect_source_files(builder.SOURCE_ROOT)
-    first = builder.source_manifest(sources)
-    second = builder.source_manifest(sources)
-
-    assert first == second
-    assert [entry["path"] for entry in first] == sorted(sources)
-    assert all(
-        entry["sha256"] == hashlib.sha256(sources[entry["path"]].encode("utf-8")).hexdigest()
-        for entry in first
-    )
-
-
-def test_source_cells_are_readable_exact_text_with_deterministic_ids() -> None:
-    sources = builder.collect_source_files(builder.SOURCE_ROOT)
-    first = builder.create_notebook(sources)
-    second = builder.create_notebook(sources)
-    source_cells = [
-        cell
-        for cell in first.cells
-        if cell.cell_type == "code"
-        and str(cell.source).startswith("%%writefile src/agentic_payments/")
-    ]
+def test_notebook_model_is_deterministic_and_repository_based() -> None:
+    first = builder.create_notebook()
+    second = builder.create_notebook()
+    text = "\n".join(str(cell.source) for cell in first.cells)
 
     assert [cell.id for cell in first.cells] == [cell.id for cell in second.cells]
-    assert len(source_cells) == len(sources)
-    for cell in source_cells:
-        line, _, embedded = str(cell.source).partition("\n")
-        path = line.removeprefix("%%writefile ")
-        assert embedded == sources[path]
+    assert first.metadata["agentic_payments_notebook_role"] == "repository-based-demonstration"
+    assert 'SOURCE_ROOT = REPOSITORY_ROOT / "src"' in text
+    assert "sys.path.insert(0, str(SOURCE_ROOT))" in text
+    assert "Run this notebook from the root of the submitted repository." in text
 
 
-def test_generated_notebook_excludes_private_and_secret_material() -> None:
-    notebook = builder.create_notebook(builder.collect_source_files(builder.SOURCE_ROOT))
+def test_notebook_does_not_embed_or_reconstruct_production_source() -> None:
+    notebook = builder.create_notebook()
     text = "\n".join(str(cell.source) for cell in notebook.cells)
 
-    assert ".codex-local" not in text
+    assert "%%writefile" not in text
+    assert "agentic_payments_source_manifest" not in notebook.metadata
+    assert "source_manifest" not in text
     assert "C:\\Users\\" not in text
+    assert ".codex-local" not in text
     assert "BEGIN PRIVATE KEY" not in text
-    assert "sk-live-" not in text
+
+
+def test_generated_notebook_meets_human_readability_limits() -> None:
+    notebook = builder.create_notebook()
+    code_lines = [
+        len(str(cell.source).splitlines()) for cell in notebook.cells if cell.cell_type == "code"
+    ]
+
+    assert 30 <= len(notebook.cells) <= 60
+    assert sum(code_lines) <= 1_500
+    assert max(code_lines) <= 200
 
 
 def test_no_execute_uses_exact_requested_output_path(tmp_path: Path) -> None:
@@ -80,6 +58,11 @@ def test_no_execute_uses_exact_requested_output_path(tmp_path: Path) -> None:
     assert output.is_file()
     assert output.name == "final_agentic_payment_project.ipynb"
     assert all(cell.execution_count is None for cell in notebook.cells if cell.cell_type == "code")
+
+
+def test_wrong_notebook_filename_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="filename"):
+        builder.build_notebook(tmp_path / "wrong.ipynb", execute=False)
 
 
 def test_execution_failure_preserves_existing_notebook(

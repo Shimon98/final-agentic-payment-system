@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from datetime import UTC, datetime
 
@@ -24,8 +25,13 @@ from agentic_payments.infrastructure.llm.sdk_guardrails import (
     MAX_TOOL_OUTPUT_CHARACTERS,
     _read_only_agent_input_guardrail,
     _specialist_output_guardrail,
+    _validate_tool_output,
 )
-from agentic_payments.infrastructure.llm.sdk_tools import get_fraud_review_facts
+from agentic_payments.infrastructure.llm.sdk_tools import (
+    get_fraud_review_facts,
+    get_last_action_facts,
+    get_security_review_facts,
+)
 
 NOW = datetime(2026, 8, 2, 12, 0, tzinfo=UTC)
 DUMMY_AGENT = Agent(name="Guardrail Test Agent", model="test-model")
@@ -124,6 +130,59 @@ def test_valid_compact_tool_output_is_allowed() -> None:
         {"facts": {"transaction_id": "TXN-1", "amount": "10.00"}},
     )
     assert _behavior_type(guardrail.guardrail_function(data)) == "allow"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("intent", "tool"),
+    [
+        (Intent.FRAUD_CHECK, get_fraud_review_facts),
+        (Intent.SECURITY_REVIEW, get_security_review_facts),
+        (Intent.EXPLAIN_LAST_ACTION, get_last_action_facts),
+    ],
+)
+async def test_complete_read_only_tool_output_is_allowed(
+    intent: Intent,
+    tool: object,
+) -> None:
+    context = SDKReadOnlyContext(
+        intent,
+        "CORR-1",
+        NOW,
+        {"created_at": NOW, "status": "reviewed"},
+    )
+    tool_context = _tool_context(context, name=tool.name)  # type: ignore[attr-defined]
+    raw = await tool.on_invoke_tool(tool_context, "{}")  # type: ignore[attr-defined]
+    output = json.loads(raw) if isinstance(raw, str) else raw
+    guardrail = tool.tool_output_guardrails[0]  # type: ignore[attr-defined]
+    data = ToolOutputGuardrailData(tool_context, DUMMY_AGENT, output)
+
+    assert _behavior_type(guardrail.guardrail_function(data)) == "allow"
+
+
+@pytest.mark.parametrize("field", ["requested_at", "created_at"])
+def test_timezone_aware_iso_datetime_in_approved_time_field_is_allowed(field: str) -> None:
+    _validate_tool_output({field: NOW.isoformat()})
+
+
+def test_malformed_approved_time_field_receives_no_broad_exemption() -> None:
+    with pytest.raises(ValueError, match="complete phone"):
+        _validate_tool_output({"requested_at": "2026-08-02"})
+
+
+@pytest.mark.parametrize(
+    "output",
+    [
+        {"message": "Call " + "050" + "1234567"},
+        {"facts": {"contact": "050" + "1234567"}},
+        {"reference": "2026-08-02"},
+    ],
+)
+def test_phone_like_value_outside_valid_time_field_is_rejected(
+    output: dict[str, object],
+) -> None:
+    with pytest.raises(ValueError, match="complete phone"):
+        _validate_tool_output(output)
 
 
 def _specialist_output(**overrides: object) -> ReadOnlySpecialistOutput:

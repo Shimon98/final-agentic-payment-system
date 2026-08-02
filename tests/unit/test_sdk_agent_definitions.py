@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agents import Agent
+from agents import Agent, AgentOutputSchema
 
 from agentic_payments.application import RouterDecision
 from agentic_payments.infrastructure.llm.schemas import ReadOnlySpecialistOutput
@@ -16,7 +16,9 @@ def test_router_exact_definition() -> None:
     router = _router_agent("test-model")  # type: ignore[arg-type]
     assert isinstance(router, Agent)
     assert router.name == "Payment Intent Router"
-    assert router.output_type is RouterDecision
+    assert isinstance(router.output_type, AgentOutputSchema)
+    assert router.output_type.output_type is RouterDecision
+    assert router.output_type.is_strict_json_schema() is False
     assert router.tools == []
     assert router.handoffs == []
 
@@ -53,6 +55,14 @@ def test_each_specialist_has_its_only_approved_read_only_tool() -> None:
     assert [tool.name for tool in definitions.explanation.tools] == ["get_last_action_facts"]
     assert all(
         agent.output_type is ReadOnlySpecialistOutput
+        for agent in (
+            definitions.fraud,
+            definitions.security,
+            definitions.explanation,
+        )
+    )
+    assert all(
+        not isinstance(agent.output_type, AgentOutputSchema)
         for agent in (
             definitions.fraud,
             definitions.security,

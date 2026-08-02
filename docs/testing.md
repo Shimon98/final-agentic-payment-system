@@ -36,10 +36,10 @@ concurrency demonstrations, and the final submission notebook as a user-observab
 
 ### Notebook tests
 
-Notebook tests verify deterministic source discovery and hashes, readable embedded source,
-stable cell IDs, exact root filename, required Hebrew RTL sections, executed outputs, all scenario
-PASS lines, privacy, atomic replacement, source-manifest synchronization, and execution after the
-notebook is copied alone into an empty directory.
+Notebook tests verify deterministic construction, stable cell IDs, the exact root filename,
+repository-based imports from `src/`, required Hebrew RTL sections, executed outputs, all scenario
+PASS lines, privacy, readability limits, atomic replacement, temporary-data isolation, absence of
+duplicated production source, and a clear error when repository source is absent.
 
 ### Optional live LLM tests
 

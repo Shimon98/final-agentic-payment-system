@@ -34,6 +34,13 @@ bootstrap      -> composes every layer
 | `infrastructure` | Locks, transactions, JSON/JSONL persistence, outbox, IDs, clock, optional SDK |
 | `presentation` | CLI parsing, interaction, demonstration, and safe formatting |
 
+## Notebook and repository boundary
+
+The complete repository is the source-code submission. `src/` is the one source of truth for the
+production implementation. The root notebook is a lecturer-facing executable demonstration: it
+imports `src/agentic_payments` from the repository root, uses temporary state and audit paths, and
+does not duplicate or reconstruct production source.
+
 ## Major command path
 
 ```text

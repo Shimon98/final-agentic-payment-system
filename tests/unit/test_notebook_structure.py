@@ -24,10 +24,10 @@ def test_exact_root_notebook_has_all_required_sections_and_rtl() -> None:
     positions = [text.index(title) for title in builder.SECTION_TITLES]
     assert positions == sorted(positions)
     assert all(title in text for title in builder.SCENARIO_TITLES)
-    assert "Lecturer requirement | Project component | Demonstration section" in text
+    assert "| דרישה | רכיב בפרויקט | הדגמה |" in text
     assert "PolicyAgent" in text
     assert "ReflectionAgent" in text
-    assert "בטיחות במקביליות" in text
+    assert builder.SECTION_TITLES[13] in text
 
 
 def test_every_hebrew_markdown_cell_has_rtl_wrapper() -> None:
@@ -40,7 +40,8 @@ def test_every_hebrew_markdown_cell_has_rtl_wrapper() -> None:
     ]
 
     assert hebrew_cells
-    assert all('<div dir="rtl">' in source for source in hebrew_cells)
+    assert all(source.startswith(validator.RTL_PREFIX) for source in hebrew_cells)
+    assert all(source.rstrip().endswith("</div>") for source in hebrew_cells)
 
 
 def test_cleanup_is_the_final_cell_and_outputs_are_preserved() -> None:

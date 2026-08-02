@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping
+from datetime import datetime
 from typing import Any
 
 from agents import (
@@ -37,6 +38,15 @@ _INTENT_TO_TOOL = {
 }
 _SECRET_MARKERS = ("api_key", "authorization", "secret", "password", "token", "prompt")
 _MONEY_MARKERS = ("amount", "balance", "money", "price", "total", "fund")
+_TIME_FIELDS = frozenset(
+    {
+        "requested_at",
+        "occurred_at",
+        "created_at",
+        "updated_at",
+        "timestamp",
+    }
+)
 _PHONE = re.compile(r"(?<!\d)(?:\+?\d[\s().-]*){7,15}(?!\d)")
 _IDENTIFIER = re.compile(r"\b(?:USR|TXN|REQ|AUD|CORR)-[A-Za-z0-9_-]+\b")
 _DECIMAL_AMOUNT = re.compile(r"(?<![\w.-])\d+\.\d{1,2}(?![\w.-])")
@@ -57,6 +67,16 @@ _EXECUTABLE_INSTRUCTION = re.compile(
 
 def _has_complete_phone(value: str) -> bool:
     return any(7 <= len(re.sub(r"\D", "", match.group())) <= 15 for match in _PHONE.finditer(value))
+
+
+def _is_approved_aware_iso_datetime(value: str, *, path: str) -> bool:
+    if path.rsplit(".", maxsplit=1)[-1] not in _TIME_FIELDS:
+        return False
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return False
+    return parsed.tzinfo is not None and parsed.utcoffset() is not None
 
 
 def _validate_json_value(value: Any, *, path: str, money_context: bool = False) -> None:
@@ -80,7 +100,7 @@ def _validate_json_value(value: Any, *, path: str, money_context: bool = False) 
     if isinstance(value, float) and money_context:
         raise ValueError(f"{path} contains float money")
     if isinstance(value, str):
-        if _has_complete_phone(value):
+        if _has_complete_phone(value) and not _is_approved_aware_iso_datetime(value, path=path):
             raise ValueError(f"{path} contains a complete phone number")
         if _EXECUTABLE_INSTRUCTION.search(value):
             raise ValueError(f"{path} contains an executable instruction")

@@ -49,8 +49,8 @@ def test_advanced_concurrency_sdk_summary_and_limitations_are_visible() -> None:
     assert "PASS — concurrency safety demonstrations" in output
     assert "PASS — JSON persistence and BusinessMemory survived restart" in output
     assert "PASS — Audit Outbox delivered all temporary audit events" in output
-    assert "OpenAI Agents SDK version:" in output
+    assert "Optional SDK router schema: locally validated" in output
     assert "Financial function tool present: no" in output
-    assert "תהליך ו-event loop יחידים" in source
+    assert "event loop" in source
     assert "מסד נתונים טרנזקציוני" in source
     assert "FINAL NOTEBOOK VALIDATION PASSED" in output

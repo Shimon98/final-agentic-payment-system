@@ -40,4 +40,4 @@ Statuses below are supported by the named current source, tests, and executed no
 | Ten explicit scenarios | Actual production flow with assertions and PASS output | `scripts/build_notebook.py` | `tests/integration/test_notebook_requirements.py` | 15. Ten lecturer tests | Done |
 | Hebrew explanations | RTL-wrapped short Markdown | `scripts/build_notebook.py` | `tests/unit/test_notebook_structure.py` | All explanatory sections | Done |
 | Final summary questions | Eight short reflection answers | `scripts/build_notebook.py` | `tests/integration/test_notebook_requirements.py` | 21. Summary questions | Done |
-| Exact notebook filename | One root self-contained executed artifact | `final_agentic_payment_project.ipynb` | `tests/end_to_end/test_submission_notebook.py`<br>`tests/end_to_end/test_submission_notebook_portability.py` | Complete notebook | Done |
+| Exact notebook filename | One root repository-based executed artifact | `final_agentic_payment_project.ipynb` | `tests/end_to_end/test_submission_notebook.py`<br>`tests/end_to_end/test_submission_notebook_portability.py` | Complete notebook | Done |

@@ -134,6 +134,41 @@ async def test_invalid_router_output_converts_to_structured_output_error(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "output",
+    [
+        RouterDecision.model_construct(intent="notAnIntent", parameters={}, confidence=0.9),
+        RouterDecision.model_construct(intent=Intent.UNKNOWN, parameters={}, confidence=1.5),
+        RouterDecision.model_construct(
+            intent=Intent.TRANSFER_MONEY,
+            parameters=["not", "a", "mapping"],
+            confidence=0.95,
+        ),
+    ],
+)
+async def test_constructed_invalid_router_decision_is_rejected_locally(
+    output: RouterDecision,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_run(
+        cls: type[Runner],
+        starting_agent: Agent[Any],
+        input: str,
+        **kwargs: Any,
+    ) -> object:
+        return _runner_result(output)
+
+    monkeypatch.setattr(Runner, "run", classmethod(fake_run))
+
+    with pytest.raises(LLMStructuredOutputError):
+        await _runtime().route(
+            user_input="unsafe provider result",
+            correlation_id="CORR-1",
+            memory=BusinessMemory(),
+        )
+
+
+@pytest.mark.asyncio
 async def test_timeout_is_safely_converted(monkeypatch: pytest.MonkeyPatch) -> None:
     async def never_returns(
         cls: type[Runner],

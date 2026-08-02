@@ -26,7 +26,7 @@ def _data_snapshot() -> dict[str, bytes]:
 def test_fresh_kernel_execution_succeeds_and_cleans_runtime() -> None:
     before = _data_snapshot()
 
-    executed = validator.execute_portability_check(NOTEBOOK, timeout=600)
+    executed = validator.execute_repository_check(NOTEBOOK, timeout=600)
 
     validator.validate_outputs(executed)
     assert _data_snapshot() == before == {".gitkeep": b"\n"}

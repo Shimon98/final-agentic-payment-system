@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from agents import Agent, Model
+from agents import Agent, AgentOutputSchema, Model
 
 from agentic_payments.agents.prompts import (
     EXPLANATION_SYSTEM_PROMPT,
@@ -80,7 +80,10 @@ def _router_agent(model: Model) -> Agent[None]:
         name="Payment Intent Router",
         instructions=f"{ROUTER_SYSTEM_PROMPT}\n\n{_COMMON_SUFFIX}\n\n{_ROUTER_SUFFIX}",
         model=model,
-        output_type=RouterDecision,
+        output_type=AgentOutputSchema(
+            RouterDecision,
+            strict_json_schema=False,
+        ),
         tools=[],
         handoffs=[],
     )

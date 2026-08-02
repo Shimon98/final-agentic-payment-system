@@ -19,8 +19,8 @@ uv sync
 uv run python scripts/build_notebook.py
 ```
 
-The builder discovers all production Python files, sorts normalized relative paths, records a
-SHA-256 manifest, writes readable `%%writefile` cells, executes in a fresh kernel, preserves
+The builder creates a concise lecturer-facing demonstration, imports the production package from
+the repository `src/` directory, executes in a fresh kernel from the repository root, preserves
 outputs, and atomically replaces the final artifact only after success.
 
 ## Validate
@@ -29,8 +29,9 @@ outputs, and atomically replaces the final artifact only after success.
 uv run python scripts/validate_notebook.py
 ```
 
-Validation checks nbformat, section order, all embedded sources and hashes, execution counts,
-required scenario output, privacy, repository data isolation, and portability.
+Validation checks nbformat, section order, repository-based imports, execution counts, required
+scenario output, privacy, temporary-data isolation, readability limits, and the clear error shown
+when repository source is absent.
 
 The expected final success text includes:
 
@@ -45,14 +46,17 @@ Temporary notebook runtime cleaned successfully.
 Open the root notebook in a Python 3 Jupyter environment and run all cells from a clean kernel.
 No API key is required. The notebook uses rule-based mode and does not make a provider request.
 
-## Portability
+## Repository-based execution
 
-The notebook contains all current production source as readable cells. Its first executable setup
-creates a `TemporaryDirectory`, changes into it, writes the embedded package below temporary
-`src/`, and uses temporary state and audit files. The final cell cleans that runtime.
+The complete repository is submitted. `src/` contains the full implementation and is the
+one source of truth; the notebook is the executable demonstration and does not duplicate production
+implementation. Run it from the repository root. Its setup imports `src/agentic_payments`, creates
+a `TemporaryDirectory`, and uses only temporary state and audit files. The final cell cleans that
+runtime.
 
-The validator copies only the notebook into an otherwise empty temporary directory and executes
-the copy. No repository source file is needed during that isolated run.
+The validator executes the notebook from the repository root and separately confirms that a copy
+run without `src/agentic_payments` fails with a clear instruction instead of reconstructing the
+project.
 
 ## Demonstrated behavior
 
@@ -72,10 +76,11 @@ The executed notebook includes:
 It also demonstrates PolicyAgent, ReflectionAgent, JSON restart, audit outbox delivery, three
 concurrency scenarios, and optional SDK structure without a live request.
 
-## Source-manifest synchronization
+## Source synchronization
 
-`scripts/validate_notebook.py` compares every current production path, SHA-256 value, and exact
-embedded source cell. Any production change requires rebuilding before validation can pass.
+The notebook imports current production code directly from `src/`; it contains no embedded
+production-source copy and no source manifest. Rebuild and validate the notebook after production
+changes so the saved demonstrations reflect the current implementation.
 
 ## Repository inclusion list
 

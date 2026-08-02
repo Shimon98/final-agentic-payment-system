@@ -48,10 +48,11 @@ def test_submission_exclusion_list_is_complete() -> None:
     assert all(item in TEXT for item in excluded)
 
 
-def test_submission_documents_portable_no_api_execution_and_scenarios() -> None:
+def test_submission_documents_repository_execution_and_scenarios() -> None:
     lowered = TEXT.lower()
 
     assert "no api key is required" in lowered
-    assert "otherwise empty temporary directory" in lowered
-    assert "source-manifest" in lowered
+    assert "repository root" in lowered
+    assert "one source of truth" in lowered
+    assert "does not duplicate" in lowered
     assert all(f"{number}." in TEXT for number in range(1, 11))

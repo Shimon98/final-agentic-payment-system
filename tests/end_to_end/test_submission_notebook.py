@@ -14,12 +14,12 @@ validator = importlib.import_module("validate_notebook")
 NOTEBOOK = ROOT / "final_agentic_payment_project.ipynb"
 
 
-def test_submission_notebook_passes_complete_nonportable_validation() -> None:
-    notebook = validator.validate_notebook(NOTEBOOK, portability=False)
+def test_submission_notebook_passes_complete_repository_validation() -> None:
+    notebook = validator.validate_notebook(NOTEBOOK, execute=False)
 
     assert NOTEBOOK.is_file()
     assert NOTEBOOK.name == "final_agentic_payment_project.ipynb"
-    assert notebook.metadata["agentic_payments_source_manifest"]
+    assert notebook.metadata["agentic_payments_notebook_role"] == "repository-based-demonstration"
 
 
 def test_submission_has_no_error_output_and_final_success() -> None:
