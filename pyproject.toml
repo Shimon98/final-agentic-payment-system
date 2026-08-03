@@ -33,6 +33,7 @@ dev = [
   "mypy>=1.11",
   "nbclient>=0.10",
   "nbformat>=5.10",
+  "pip>=25,<27",
   "pytest>=8.3",
   "pytest-asyncio>=0.24",
   "pytest-cov>=5.0",
