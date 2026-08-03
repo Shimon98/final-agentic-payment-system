@@ -157,8 +157,11 @@ See [Provider configuration](docs/provider_configuration.md) and
 ## Installation
 
 ```powershell
-uv sync
+uv sync --frozen
 ```
+
+The complete development dependency set, including JupyterLab, is installed from
+`pyproject.toml` and `uv.lock`; no separate manual Jupyter installation is required.
 
 ## Configuration
 
@@ -198,7 +201,16 @@ See [Execution examples](docs/execution_examples.md) for sanitized illustrative 
 
 ## Running the notebook
 
-Build and execute the root notebook from the complete submitted repository:
+Open the interactive notebook from the repository root:
+
+```powershell
+uv run agentic-payments-notebook
+```
+
+This uses the current uv-managed Python environment, starts JupyterLab at the repository root,
+and opens `final_agentic_payment_project.ipynb`.
+
+Rebuild and execute the submitted notebook non-interactively:
 
 ```powershell
 uv run python scripts/build_notebook.py
@@ -213,6 +225,13 @@ uv run python scripts/validate_notebook.py
 
 The artifact is [final_agentic_payment_project.ipynb](final_agentic_payment_project.ipynb).
 See [Submission instructions](docs/submission.md).
+
+### PyCharm
+
+Select the shared **Run Final Notebook** Run Configuration and click **Run**. It executes
+`uv sync --frozen` and then the uv-based notebook launcher. PyCharm interpreter registration
+remains an IDE-local setting, but this shared configuration does not depend on manually selecting
+or registering a Python interpreter.
 
 ## Running tests
 

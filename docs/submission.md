@@ -15,7 +15,7 @@ It lives at the repository root. Do not create a second submission notebook.
 From the repository root:
 
 ```powershell
-uv sync
+uv sync --frozen
 uv run python scripts/build_notebook.py
 ```
 
@@ -43,8 +43,28 @@ Temporary notebook runtime cleaned successfully.
 
 ## Run
 
-Open the root notebook in a Python 3 Jupyter environment and run all cells from a clean kernel.
-No API key is required. The notebook uses rule-based mode and does not make a provider request.
+Install the complete locked dependency set and open the interactive root notebook:
+
+```powershell
+uv sync --frozen
+uv run agentic-payments-notebook
+```
+
+JupyterLab is declared in `pyproject.toml` and locked in `uv.lock`; no separate manual Jupyter
+installation is required. The launcher uses the current uv-managed Python environment, starts at
+the repository root, and opens `final_agentic_payment_project.ipynb`. No API key is required. The
+notebook uses rule-based mode and does not make a provider request.
+
+The three notebook commands have separate roles:
+
+- `uv run agentic-payments-notebook` opens the interactive notebook.
+- `uv run python scripts/build_notebook.py` rebuilds and executes the submitted artifact.
+- `uv run python scripts/validate_notebook.py` validates the submitted artifact.
+
+In PyCharm, select the shared **Run Final Notebook** Run Configuration and click **Run**. IDE
+interpreter registration remains local to each PyCharm installation; the shared uv-based
+configuration does not depend on manual interpreter registration. The optional shared
+**Execute and Validate Final Notebook** configuration runs the two headless commands.
 
 ## Repository-based execution
 
@@ -89,6 +109,7 @@ Include:
 - `src/`
 - `tests/`
 - `scripts/`
+- `.run/`
 - `docs/`
 - `final_agentic_payment_project.ipynb`
 - `README.md`

@@ -24,10 +24,12 @@ dependencies = [
 
 [project.scripts]
 agentic-payments = "agentic_payments.presentation.cli:main"
+agentic-payments-notebook = "agentic_payments.presentation.notebook_launcher:main"
 
 [dependency-groups]
 dev = [
   "ipykernel>=6.29",
+  "jupyterlab>=4.4,<5",
   "mypy>=1.11",
   "nbclient>=0.10",
   "nbformat>=5.10",

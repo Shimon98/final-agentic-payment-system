@@ -41,6 +41,11 @@ repository-based imports from `src/`, required Hebrew RTL sections, executed out
 PASS lines, privacy, readability limits, atomic replacement, temporary-data isolation, absence of
 duplicated production source, and a clear error when repository source is absent.
 
+Notebook runtime tests also verify the locked JupyterLab development dependency, public
+`agentic-payments-notebook` entrypoint, repository-root discovery, use of the current Python
+executable, safe missing-dependency behavior, keyboard interruption, repository-data isolation,
+and both portable shared PyCharm Run Configurations.
+
 ### Optional live LLM tests
 
 Files under `tests/live` are marked `live_llm`, require
@@ -66,6 +71,12 @@ changes totals. Phase 12 will run and report final totals again.
 
 ## Standard commands
 
+Install the complete frozen environment:
+
+```powershell
+uv sync --frozen
+```
+
 ```powershell
 uv run pytest tests/unit tests/integration tests/concurrency tests/end_to_end -m "not live_llm"
 ```
@@ -87,8 +98,14 @@ uv run mypy src/agentic_payments scripts
 Notebook validation:
 
 ```powershell
+uv run agentic-payments-notebook
+uv run python scripts/build_notebook.py
 uv run python scripts/validate_notebook.py
 ```
+
+The first command is interactive. The builder and validator are deterministic headless checks.
+No separate manual Jupyter installation or PyCharm interpreter registration is required by the
+shared **Run Final Notebook** configuration.
 
 CI repeats the deterministic suite with frozen dependencies, Python 3.12, rule-based routing, and
 no provider secrets.
